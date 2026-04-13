@@ -1,0 +1,48 @@
+{
+  "name": "ha-gatekeeper",
+  "version": "0.1.0",
+  "description": "A reliability-first MCP server for Home Assistant implementing the LLM-as-untrusted-advisor architecture",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "Ant Newman <antjsnewman@outlook.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/antnewman/ha-gatekeeper.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "better-sqlite3": "^11.8.1",
+    "express": "^5.1.0",
+    "home-assistant-js-websocket": "^9.4.0",
+    "pino": "^9.6.0",
+    "prom-client": "^15.1.3",
+    "uuid": "^11.1.0",
+    "yaml": "^2.7.1",
+    "zod": "^3.25.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.2",
+    "@types/uuid": "^10.0.0",
+    "eslint": "^9.25.1",
+    "@typescript-eslint/eslint-plugin": "^8.31.0",
+    "@typescript-eslint/parser": "^8.31.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.31.0",
+    "vitest": "^3.1.2"
+  }
+}

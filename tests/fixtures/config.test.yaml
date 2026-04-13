@@ -1,0 +1,73 @@
+# Minimal valid config for testing.
+homeassistant:
+  url: "ws://localhost:8123/api/websocket"
+  token: "test-token-abc123"
+
+server:
+  port: 8200
+  host: "0.0.0.0"
+  transport: "streamable-http"
+
+policy:
+  default_tier: 3
+  tiers:
+    0:
+      description: "Read-only"
+      domains:
+        - "sensor.*"
+        - "binary_sensor.*"
+    1:
+      description: "Logged"
+      domains:
+        - "light.*"
+        - "switch.*"
+      constraints:
+        rate_limit:
+          max_calls_per_entity_per_minute: 10
+    2:
+      description: "Confirmed"
+      domains:
+        - "climate.*"
+        - "lock.*"
+      constraints:
+        rate_limit:
+          max_calls_per_entity_per_minute: 3
+        confirmation:
+          method: "notification"
+          timeout_seconds: 30
+          notification_service: "notify.mobile_app_test"
+          message_template: "Approve {{action}} on {{entity_id}}?"
+        range_clamp:
+          climate.temperature:
+            min: 15
+            max: 25
+    3:
+      description: "Prohibited"
+      domains:
+        - "automation.*"
+        - "script.*"
+      entities:
+        - "switch.dangerous"
+      actions:
+        - "homeassistant.restart"
+  entity_overrides:
+    light.nursery: 2
+    climate.office: 1
+
+circuit_breaker:
+  health_check_interval_ms: 30000
+  failure_threshold: 3
+  recovery_threshold: 5
+  timeout_ms: 10000
+
+observability:
+  audit_log:
+    enabled: true
+    database: "./data/test-audit.db"
+    retention_days: 30
+  metrics:
+    enabled: false
+    port: 9090
+  health:
+    enabled: false
+    port: 8201

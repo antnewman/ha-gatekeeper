@@ -1,0 +1,23 @@
+services:
+  ha-gatekeeper:
+    build: .
+    ports:
+      - "8200:8200"   # MCP Streamable HTTP
+      - "8201:8201"   # Health check
+      - "9090:9090"   # Prometheus metrics
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - gatekeeper-data:/app/data
+    environment:
+      - HA_TOKEN=${HA_TOKEN}
+      - HA_SENTINEL_LOG_LEVEL=info
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8201/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  gatekeeper-data:

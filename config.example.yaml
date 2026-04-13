@@ -1,0 +1,138 @@
+# ha-gatekeeper configuration
+# Copy this file to config.yaml and adjust for your Home Assistant instance.
+
+homeassistant:
+  # WebSocket URL for your Home Assistant instance.
+  url: "ws://homeassistant.local:8123/api/websocket"
+  # Long-lived access token. Use an environment variable reference.
+  token: "${HA_TOKEN}"
+  # Milliseconds between reconnection attempts.
+  reconnect_interval_ms: 5000
+  # Maximum number of consecutive reconnection attempts before giving up.
+  max_reconnect_attempts: 10
+
+server:
+  # Port for the MCP Streamable HTTP transport.
+  port: 8200
+  # Bind address. Use 0.0.0.0 to listen on all interfaces.
+  host: "0.0.0.0"
+  # Transport mode: "streamable-http" or "stdio".
+  transport: "streamable-http"
+  # Session mode: "stateful" or "stateless".
+  session_mode: "stateful"
+
+# Policy tiers define what the LLM is allowed to do.
+# Every entity and service domain must be classified.
+# Unclassified entities default to the highest restriction (tier 3).
+policy:
+  # Fail closed: any unclassified entity is prohibited.
+  default_tier: 3
+
+  tiers:
+    # Tier 0 -- Unrestricted: execute immediately, minimal logging.
+    0:
+      description: "Read-only queries and low-consequence reversible actions"
+      domains:
+        - "sensor.*"
+        - "binary_sensor.*"
+        - "weather.*"
+        - "sun.*"
+        - "person.*"
+      actions:
+        - "homeassistant.get_state"
+        - "homeassistant.get_states"
+        - "homeassistant.get_entity"
+        - "homeassistant.search"
+
+    # Tier 1 -- Logged: execute and log with full audit trail.
+    1:
+      description: "Reversible actions on non-critical devices"
+      domains:
+        - "light.*"
+        - "switch.*"
+        - "media_player.*"
+        - "fan.*"
+        - "cover.*"
+        - "input_boolean.*"
+        - "input_number.*"
+        - "scene.*"
+      constraints:
+        rate_limit:
+          max_calls_per_entity_per_minute: 10
+
+    # Tier 2 -- Confirmed: require human approval before execution.
+    2:
+      description: "Actions with physical safety or security implications"
+      domains:
+        - "climate.*"
+        - "lock.*"
+        - "alarm_control_panel.*"
+        - "valve.*"
+        - "humidifier.*"
+      constraints:
+        rate_limit:
+          max_calls_per_entity_per_minute: 3
+        confirmation:
+          method: "notification"
+          timeout_seconds: 30
+          notification_service: "notify.mobile_app_ant"
+          message_template: "ha-gatekeeper: LLM wants to {{action}} on {{entity_id}}. Approve?"
+        range_clamp:
+          climate.temperature:
+            min: 15
+            max: 25
+          climate.target_temp_high:
+            min: 15
+            max: 28
+          climate.target_temp_low:
+            min: 12
+            max: 22
+
+    # Tier 3 -- Prohibited: deterministically blocked, always.
+    3:
+      description: "Actions the LLM must never perform autonomously"
+      domains:
+        - "automation.*"
+        - "script.*"
+        - "input_button.*"
+      entities:
+        - "switch.garage_door_relay"
+        - "lock.front_door"
+        - "alarm_control_panel.home_alarm"
+      actions:
+        - "homeassistant.restart"
+        - "homeassistant.reload_*"
+        - "backup.*"
+
+  # Entity-level overrides take precedence over domain rules.
+  # Use this to promote or demote specific entities.
+  entity_overrides:
+    light.nursery: 2
+    switch.server_rack_pdu: 3
+    climate.office: 1
+
+circuit_breaker:
+  # Milliseconds between health checks when the circuit is open.
+  health_check_interval_ms: 30000
+  # Consecutive failures required to trip the circuit breaker.
+  failure_threshold: 3
+  # Consecutive successes required to reset from half-open to closed.
+  recovery_threshold: 5
+  # Maximum time in milliseconds for any HA API call.
+  timeout_ms: 10000
+
+observability:
+  audit_log:
+    enabled: true
+    # SQLite database path for the audit log.
+    database: "./data/audit.db"
+    # Number of days to retain audit log entries.
+    retention_days: 90
+  metrics:
+    enabled: true
+    # Port for the Prometheus scrape endpoint.
+    port: 9090
+  health:
+    enabled: true
+    # Port for the health check endpoint.
+    port: 8201

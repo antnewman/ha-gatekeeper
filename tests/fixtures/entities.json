@@ -1,0 +1,75 @@
+{
+  "sensor.temperature_living_room": {
+    "entity_id": "sensor.temperature_living_room",
+    "state": "21.5",
+    "attributes": {
+      "unit_of_measurement": "°C",
+      "device_class": "temperature",
+      "friendly_name": "Living Room Temperature"
+    },
+    "last_changed": "2026-04-13T10:00:00.000Z",
+    "last_updated": "2026-04-13T10:00:00.000Z"
+  },
+  "light.living_room": {
+    "entity_id": "light.living_room",
+    "state": "on",
+    "attributes": {
+      "brightness": 200,
+      "color_temp": 370,
+      "friendly_name": "Living Room Light"
+    },
+    "last_changed": "2026-04-13T09:30:00.000Z",
+    "last_updated": "2026-04-13T09:30:00.000Z"
+  },
+  "light.nursery": {
+    "entity_id": "light.nursery",
+    "state": "off",
+    "attributes": {
+      "friendly_name": "Nursery Light"
+    },
+    "last_changed": "2026-04-13T08:00:00.000Z",
+    "last_updated": "2026-04-13T08:00:00.000Z"
+  },
+  "climate.office": {
+    "entity_id": "climate.office",
+    "state": "heat",
+    "attributes": {
+      "temperature": 20,
+      "current_temperature": 19.5,
+      "hvac_modes": ["heat", "cool", "off"],
+      "friendly_name": "Office Climate"
+    },
+    "last_changed": "2026-04-13T07:00:00.000Z",
+    "last_updated": "2026-04-13T07:00:00.000Z"
+  },
+  "climate.bedroom": {
+    "entity_id": "climate.bedroom",
+    "state": "off",
+    "attributes": {
+      "temperature": 18,
+      "current_temperature": 17.5,
+      "hvac_modes": ["heat", "cool", "off"],
+      "friendly_name": "Bedroom Climate"
+    },
+    "last_changed": "2026-04-13T06:00:00.000Z",
+    "last_updated": "2026-04-13T06:00:00.000Z"
+  },
+  "switch.dangerous": {
+    "entity_id": "switch.dangerous",
+    "state": "off",
+    "attributes": {
+      "friendly_name": "Dangerous Switch"
+    },
+    "last_changed": "2026-04-13T05:00:00.000Z",
+    "last_updated": "2026-04-13T05:00:00.000Z"
+  },
+  "automation.morning_routine": {
+    "entity_id": "automation.morning_routine",
+    "state": "on",
+    "attributes": {
+      "friendly_name": "Morning Routine"
+    },
+    "last_changed": "2026-04-13T04:00:00.000Z",
+    "last_updated": "2026-04-13T04:00:00.000Z"
+  }
+}
