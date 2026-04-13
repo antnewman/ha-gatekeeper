@@ -1,0 +1,29 @@
+# ha-gatekeeper
+
+> A reliability-first MCP server for Home Assistant that implements the "LLM as an untrusted advisor" architecture. Interposes a four-tier deterministic policy engine (unrestricted, logged, confirmed, prohibited) between an LLM's intent and Home Assistant's execution layer. Every action is classified, authorised, rate-limited, and audited. Built with TypeScript, Node.js 20+, and the MCP SDK v1.x using Streamable HTTP transport.
+
+## Documentation
+
+- [Getting Started](https://github.com/antnewman/ha-gatekeeper/blob/main/docs/getting-started.md): Installation, configuration walkthrough, running the server, connecting MCP clients, and verification steps
+- [Configuration Reference](https://github.com/antnewman/ha-gatekeeper/blob/main/docs/configuration.md): Full reference for config.yaml including all fields, types, defaults, tier assignment guide, and constraint setup
+- [Architecture](https://github.com/antnewman/ha-gatekeeper/blob/main/docs/architecture.md): Four-layer design, request flow, policy engine resolution order, circuit breaker state machine, audit log schema, and Prometheus metrics
+
+## Key Files
+
+- [README](https://github.com/antnewman/ha-gatekeeper/blob/main/README.md): Project overview, feature summary, tool reference, and quick start
+- [config.example.yaml](https://github.com/antnewman/ha-gatekeeper/blob/main/config.example.yaml): Fully annotated example configuration file
+- [CLAUDE.md](https://github.com/antnewman/ha-gatekeeper/blob/main/CLAUDE.md): Coding standards, project structure, build phases, and contribution guidelines
+
+## Source Code
+
+- [src/config/schema.ts](https://github.com/antnewman/ha-gatekeeper/blob/main/src/config/schema.ts): Zod schema defining the configuration structure and validation rules
+- [src/config/loader.ts](https://github.com/antnewman/ha-gatekeeper/blob/main/src/config/loader.ts): YAML config loading with environment variable substitution
+- [src/execution/ha-client.ts](https://github.com/antnewman/ha-gatekeeper/blob/main/src/execution/ha-client.ts): Home Assistant WebSocket client wrapper with entity state cache
+- [src/types/policy.ts](https://github.com/antnewman/ha-gatekeeper/blob/main/src/types/policy.ts): Policy engine type definitions (tiers, decisions, constraints)
+
+## Optional
+
+- [Dockerfile](https://github.com/antnewman/ha-gatekeeper/blob/main/Dockerfile): Multi-stage Docker build with non-root user
+- [docker-compose.yaml](https://github.com/antnewman/ha-gatekeeper/blob/main/docker-compose.yaml): Docker Compose orchestration with health checks and volume mounts
+- [LICENSE](https://github.com/antnewman/ha-gatekeeper/blob/main/LICENSE): MIT licence
+- [Full LLM documentation](https://github.com/antnewman/ha-gatekeeper/blob/main/llms-full.txt): Complete project documentation in a single file for LLM consumption

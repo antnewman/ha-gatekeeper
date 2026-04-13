@@ -1,0 +1,266 @@
+# ha-gatekeeper -- Complete Documentation
+
+> A reliability-first MCP server for Home Assistant implementing the "LLM as an untrusted advisor" architecture. The LLM generates intent; a deterministic policy engine decides whether that intent is permitted.
+
+## Overview
+
+ha-gatekeeper interposes a four-tier deterministic policy engine between an LLM and Home Assistant. Unlike existing HA MCP servers that execute LLM tool calls directly against HA with no authorisation layer, ha-gatekeeper classifies, authorises, rate-limits, and audits every action.
+
+Key properties:
+- If ha-gatekeeper crashes, Home Assistant continues to function normally. The LLM layer is additive, never load-bearing.
+- Unclassified entities default to Tier 3 (prohibited). The system fails closed.
+- Entity IDs are validated against live HA state before reaching the policy engine. Hallucinated entities are rejected.
+- All Tier 1+ actions are recorded in a SQLite audit log with before/after entity state.
+
+Tech stack: TypeScript (strict mode), Node.js >= 20, MCP SDK v1.x (Streamable HTTP transport), home-assistant-js-websocket, better-sqlite3, Zod, pino, prom-client, Express.
+
+---
+
+## Architecture
+
+Four-layer design:
+
+1. MCP Server (Layer 1): Tool registry (14 curated tools), entity validator, request context builder.
+2. Policy Engine (Layer 2): Tier resolver, rate limiter, range clamper, HITL confirmation.
+3. Execution Engine (Layer 3): HA WebSocket client, state capture with 500ms settling delay, three-state circuit breaker.
+4. Observability (Layer 4): SQLite audit log, Prometheus metrics, health check endpoint.
+
+Request flow: MCP tool call -> entity validation (does entity exist in HA?) -> tier resolution (entity -> tier 0-3) -> policy constraints (rate limit, range clamp, confirmation) -> execution via HA WebSocket -> state capture (before/after) -> audit log -> return result.
+
+---
+
+## Policy Tiers
+
+Tier 0 (Unrestricted): Execute immediately, no audit log entry. Used for read-only queries.
+- Default domains: sensor.*, binary_sensor.*, weather.*, sun.*, person.*
+- Default actions: homeassistant.get_state, homeassistant.get_states, homeassistant.get_entity, homeassistant.search
+
+Tier 1 (Logged): Execute and write full audit trail with before/after state. Rate limiting applied.
+- Default domains: light.*, switch.*, media_player.*, fan.*, cover.*, input_boolean.*, input_number.*, scene.*
+- Default rate limit: 10 calls per entity per minute
+
+Tier 2 (Confirmed): Requires human approval before execution. Rate limiting, range clamping, and confirmation applied.
+- Default domains: climate.*, lock.*, alarm_control_panel.*, valve.*, humidifier.*
+- Default rate limit: 3 calls per entity per minute
+- Confirmation via HA notification service with configurable timeout (default 30s)
+- Range clamping enforces hard min/max on numeric values (e.g. temperature 15-25C)
+
+Tier 3 (Prohibited): Deterministically blocked. The attempt is always logged. Never executed.
+- Default domains: automation.*, script.*, input_button.*
+- Default actions: homeassistant.restart, homeassistant.reload_*, backup.*
+- Returns: "This action is not permitted by policy. Entity [X] is classified as Tier 3 (Prohibited)."
+
+### Tier Resolution Order
+
+Resolution is deterministic. The first match in this order wins:
+1. entity_overrides map (specific entity_id -> tier)
+2. tiers[n].entities lists (specific entity_id within a tier definition)
+3. tiers[n].domains patterns (domain wildcards like light.*)
+4. tiers[n].actions patterns (action wildcards like homeassistant.reload_*)
+5. default_tier (fallback, default: 3)
+
+Entity-level overrides always take precedence over domain rules. Example: light.nursery can be promoted to Tier 2 even though light.* is Tier 1.
+
+---
+
+## Tools
+
+14 curated tools organised by user intent:
+
+### Read Tools (Tier 0)
+- get_entity_state: Get current state and attributes of one entity. Input: entity_id.
+- list_entities: List entities with optional domain/area/label filter. Input: domain?, area?, label?.
+- get_area_summary: Get all devices and states in an area. Input: area.
+- get_home_summary: High-level summary of the entire home state. No input required.
+- get_entity_history: State history for an entity over a time range. Input: entity_id, start_time?, end_time?.
+
+### Control Tools (Tier depends on target entity)
+- turn_on: Turn on a light, switch, fan, media player, etc. Input: entity_id.
+- turn_off: Turn off a device. Input: entity_id.
+- toggle: Toggle device state. Input: entity_id.
+- set_value: Set a numeric value (brightness, temperature, volume, position). Input: entity_id, attribute, value.
+- activate_scene: Activate a predefined scene. Input: entity_id.
+- send_command: Domain-specific command (e.g. media_player.play_media). Input: domain, service, entity_id?, service_data?.
+
+### Monitoring Tools
+- get_anomalies: Analyse current home state and report anomalies.
+- get_policy_summary: Show current policy tiers and entity classifications.
+
+### Meta Tools
+- get_server_health: Return health status, circuit breaker state, recent error rates.
+
+All tools use Zod input schemas. Read tools are annotated with readOnlyHint: true. Control tools with tier >= 2 are annotated with destructiveHint: true.
+
+---
+
+## Configuration
+
+Single YAML file (config.yaml) with environment variable substitution (${VAR_NAME} syntax).
+
+### homeassistant section
+- url (string, required): WebSocket URL, e.g. ws://homeassistant.local:8123/api/websocket
+- token (string, required): Long-lived access token. Use ${HA_TOKEN} for env var.
+- reconnect_interval_ms (integer, optional, default 5000): Ms between reconnection attempts.
+- max_reconnect_attempts (integer, optional, default 10): Max consecutive reconnection attempts.
+
+### server section
+- port (integer, required): MCP transport port (default 8200).
+- host (string, required): Bind address (default 0.0.0.0).
+- transport (string, required): "streamable-http" or "stdio".
+- session_mode (string, optional, default "stateful"): "stateful" or "stateless".
+
+### policy section
+- default_tier (0-3, required): Fallback tier. Use 3 to fail closed.
+- tiers: Map of tier number (0-3) to tier config.
+  - description (string, required): Human-readable description.
+  - domains (string[], optional): Domain wildcard patterns.
+  - entities (string[], optional): Specific entity IDs.
+  - actions (string[], optional): Action patterns.
+  - constraints (object, optional):
+    - rate_limit.max_calls_per_entity_per_minute (integer)
+    - confirmation.method ("notification" or "webhook")
+    - confirmation.timeout_seconds (integer)
+    - confirmation.notification_service (string, e.g. notify.mobile_app_ant)
+    - confirmation.message_template (string, supports {{action}} and {{entity_id}})
+    - range_clamp: Map of "domain.attribute" to {min, max}.
+- entity_overrides: Map of entity_id to tier number. Highest priority in resolution.
+
+### circuit_breaker section
+- health_check_interval_ms (integer, required): Ms between health checks when circuit is open.
+- failure_threshold (integer, required): Consecutive failures to trip.
+- recovery_threshold (integer, required): Consecutive successes to reset from half-open.
+- timeout_ms (integer, required): Max time for any HA API call.
+
+### observability section
+- audit_log.enabled (boolean), audit_log.database (string, SQLite path), audit_log.retention_days (integer)
+- metrics.enabled (boolean), metrics.port (integer, Prometheus scrape endpoint)
+- health.enabled (boolean), health.port (integer, health check endpoint)
+
+### Environment Variables
+- HA_TOKEN: Home Assistant long-lived access token (required)
+- HA_SENTINEL_CONFIG: Path to config YAML file (default ./config.yaml)
+- HA_SENTINEL_LOG_LEVEL: debug | info | warn | error (default info)
+- NODE_ENV: Runtime environment (default production)
+
+---
+
+## Circuit Breaker
+
+Three states: CLOSED (normal), OPEN (tripped), HALF_OPEN (testing recovery).
+
+CLOSED: All requests flow through. Failures increment a counter. Any success resets the counter. If counter >= failure_threshold, transition to OPEN.
+
+OPEN: All control tool calls return a circuit breaker error. Read tools may still function. After health_check_interval_ms, attempt a health check (get_config call). If it succeeds, transition to HALF_OPEN.
+
+HALF_OPEN: Limited requests allowed. If recovery_threshold consecutive successes, transition to CLOSED. Any failure transitions back to OPEN.
+
+---
+
+## Audit Log
+
+SQLite database with the following schema:
+
+Columns: id (INTEGER PK), timestamp (TEXT ISO 8601), request_id (TEXT UUID), tool_name (TEXT), entity_id (TEXT), action (TEXT), parameters (TEXT JSON), policy_tier (INTEGER 0-3), policy_decision (TEXT: allowed|denied_rate_limit|denied_prohibited|denied_timeout|confirmed|clamped), clamped_from (TEXT JSON), clamped_to (TEXT JSON), state_before (TEXT JSON), state_after (TEXT JSON), execution_duration_ms (INTEGER), error (TEXT), llm_rationale (TEXT), created_at (TEXT).
+
+Indexes on: timestamp, entity_id, policy_decision.
+Retention: configurable, default 90 days.
+
+---
+
+## Prometheus Metrics
+
+Exposed at GET /metrics on the configured port (default 9090):
+
+- ha_gatekeeper_tool_calls_total (counter, labels: tool, tier, decision)
+- ha_gatekeeper_tool_call_duration_seconds (histogram, labels: tool)
+- ha_gatekeeper_circuit_breaker_state (gauge, 0=closed, 1=half_open, 2=open)
+- ha_gatekeeper_rate_limit_rejections_total (counter, labels: entity_id)
+- ha_gatekeeper_entity_hallucinations_total (counter)
+- ha_gatekeeper_confirmation_timeouts_total (counter)
+- ha_gatekeeper_ha_connection_state (gauge, 0=disconnected, 1=connected)
+- ha_gatekeeper_policy_denials_total (counter, labels: tier, reason)
+
+---
+
+## Health Check
+
+GET /health on the configured port (default 8201):
+
+Response: { status, circuit_breaker, ha_connected, ha_entity_count, uptime_seconds, last_tool_call, error_rate_1h, version }
+
+Status values: "healthy" (breaker closed + HA connected), "degraded" (breaker half-open), "unhealthy" (breaker open or HA disconnected).
+
+---
+
+## Project Structure
+
+```
+src/
+  index.ts                     Entry point: config load, HA connect, server start
+  logger.ts                    Pino logger instance
+  config/
+    schema.ts                  Zod schema for config.yaml
+    loader.ts                  YAML loading + ${ENV_VAR} substitution
+    defaults.ts                Default config values
+  server/
+    mcp-server.ts              McpServer setup and transport
+    tools/
+      index.ts                 Tool registry
+      read-tools.ts            get_entity_state, list_entities, get_area_summary, get_home_summary, get_entity_history
+      control-tools.ts         turn_on, turn_off, toggle, set_value, activate_scene, send_command
+      monitoring-tools.ts      get_anomalies, get_policy_summary
+      meta-tools.ts            get_server_health
+  policy/
+    engine.ts                  Policy evaluation orchestrator
+    tier-resolver.ts           Entity/action -> tier number
+    rate-limiter.ts            Per-entity sliding window
+    range-clamper.ts           Numeric value clamping
+    confirmation.ts            HITL confirmation flow
+  execution/
+    ha-client.ts               HA WebSocket connection (home-assistant-js-websocket)
+    state-capture.ts           Before/after state with 500ms settling delay
+    circuit-breaker.ts         Three-state circuit breaker
+  observability/
+    audit-log.ts               SQLite audit log (better-sqlite3, WAL mode)
+    metrics.ts                 Prometheus metrics (prom-client)
+    health.ts                  Health check endpoint (Express)
+  types/
+    ha.ts                      HA API types (EntityState, HAServiceCall, etc.)
+    policy.ts                  Policy types (PolicyTier, PolicyDecision, TierConfig, etc.)
+    audit.ts                   Audit log entry type
+    tools.ts                   Tool I/O types
+tests/
+  unit/                        Mirrors src/ structure
+  integration/                 Full pipeline tests
+  fixtures/                    Test config YAML, mock entity JSON
+```
+
+---
+
+## Development
+
+Commands:
+- npm run build: TypeScript compilation (strict mode, noUncheckedIndexedAccess, exactOptionalPropertyTypes)
+- npm run dev: Hot reload development mode (tsx watch)
+- npm run lint: ESLint with strict TypeScript rules
+- npm run test: Vitest (unit + integration)
+- npm start: Run compiled server
+
+Coding standards:
+- British English throughout
+- Conventional commits (feat:, fix:, chore:, refactor:, test:, docs:)
+- No `any` type without inline justification
+- No console.log (use pino logger)
+- No empty catch blocks
+- JSDoc on all public functions
+- Tests required for every new module
+
+TypeScript config: target ES2022, module NodeNext, strict: true, noUncheckedIndexedAccess: true, exactOptionalPropertyTypes: true.
+
+---
+
+## Deployment
+
+Docker multi-stage build. Runs as non-root user (gatekeeper). Exposes ports 8200 (MCP), 8201 (health), 9090 (metrics). Health check via wget to /health endpoint. Data volume for SQLite audit database.
+
+Docker Compose provided with config.yaml mounted read-only, HA_TOKEN via environment variable, restart unless-stopped policy.
