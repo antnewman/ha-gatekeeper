@@ -30,6 +30,13 @@ export class MetricsRegistry {
   readonly haConnectionState: Gauge;
   readonly policyDenialsTotal: Counter;
 
+  /** Timestamp of the most recent tool call. */
+  private _lastToolCallTime: Date | null = null;
+
+  /** Sliding window of tool call error timestamps for error rate calculation. */
+  private readonly _recentErrors: number[] = [];
+  private readonly _recentCalls: number[] = [];
+
   constructor() {
     this.registry = new Registry();
     collectDefaultMetrics({ register: this.registry });
@@ -88,6 +95,26 @@ export class MetricsRegistry {
     });
   }
 
+  /** Get the timestamp of the most recent tool call, or null if none. */
+  get lastToolCallTime(): Date | null {
+    return this._lastToolCallTime;
+  }
+
+  /**
+   * Get the error rate over the last hour (0.0 to 1.0).
+   */
+  getErrorRateLastHour(): number {
+    const oneHourAgo = Date.now() - 3600000;
+    const recentCalls = this._recentCalls.filter((t) => t > oneHourAgo);
+    const recentErrors = this._recentErrors.filter((t) => t > oneHourAgo);
+
+    if (recentCalls.length === 0) {
+      return 0;
+    }
+
+    return recentErrors.length / recentCalls.length;
+  }
+
   /**
    * Record a tool call with its outcome.
    *
@@ -99,6 +126,13 @@ export class MetricsRegistry {
     this.toolCallsTotal
       .labels(tool, String(tier), decision)
       .inc();
+
+    this._lastToolCallTime = new Date();
+    this._recentCalls.push(Date.now());
+
+    if (decision.startsWith("denied")) {
+      this._recentErrors.push(Date.now());
+    }
   }
 
   /**

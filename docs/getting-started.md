@@ -145,6 +145,8 @@ For Tier 2 actions to work, you need a notification service configured in Home A
 2. In `config.yaml`, set `notification_service` to your device's notify service (e.g. `notify.mobile_app_your_phone`).
 3. When the LLM requests a Tier 2 action, you will receive a notification on your phone to approve or deny.
 
+The confirmation webhook server runs on port 8202 (MCP port + 2) by default. Approvals and denials are submitted to `POST /api/confirm/{token}` on this port.
+
 ### 5. Range Clamping (optional)
 
 For Tier 2 entities with numeric values, you can set hard boundaries:
@@ -233,7 +235,10 @@ You should see:
   "circuit_breaker": "closed",
   "ha_connected": true,
   "ha_entity_count": 147,
-  "uptime_seconds": 60
+  "uptime_seconds": 60,
+  "last_tool_call": null,
+  "error_rate_1h": 0,
+  "version": "0.1.0"
 }
 ```
 

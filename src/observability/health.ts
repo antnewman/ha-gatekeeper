@@ -10,11 +10,13 @@ import type { Server } from "node:http";
 import { logger } from "../logger.js";
 import type { HAClient } from "../execution/ha-client.js";
 import type { CircuitBreaker } from "../execution/circuit-breaker.js";
+import type { MetricsRegistry } from "./metrics.js";
 
 /** Dependencies required by the health check endpoint. */
 export interface HealthDependencies {
   haClient: HAClient;
   circuitBreaker: CircuitBreaker;
+  metrics: MetricsRegistry;
   startTime: Date;
   version: string;
 }
@@ -26,6 +28,8 @@ export interface HealthResponse {
   ha_connected: boolean;
   ha_entity_count: number;
   uptime_seconds: number;
+  last_tool_call: string | null;
+  error_rate_1h: number;
   version: string;
 }
 
@@ -55,6 +59,8 @@ export function createHealthServer(
       status = "healthy";
     }
 
+    const lastToolCall = deps.metrics.lastToolCallTime;
+
     const response: HealthResponse = {
       status,
       circuit_breaker: cbState,
@@ -63,6 +69,8 @@ export function createHealthServer(
       uptime_seconds: Math.floor(
         (Date.now() - deps.startTime.getTime()) / 1000,
       ),
+      last_tool_call: lastToolCall ? lastToolCall.toISOString() : null,
+      error_rate_1h: deps.metrics.getErrorRateLastHour(),
       version: deps.version,
     };
 

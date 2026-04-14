@@ -261,6 +261,6 @@ TypeScript config: target ES2022, module NodeNext, strict: true, noUncheckedInde
 
 ## Deployment
 
-Docker multi-stage build. Runs as non-root user (gatekeeper). Exposes ports 8200 (MCP), 8201 (health), 9090 (metrics). Health check via wget to /health endpoint. Data volume for SQLite audit database.
+Docker multi-stage build. Runs as non-root user (gatekeeper). Exposes ports 8200 (MCP), 8201 (health), 8202 (confirmation webhook), 9090 (metrics). Health check via wget to /health endpoint. Data volume for SQLite audit database.
 
 Docker Compose provided with config.yaml mounted read-only, HA_TOKEN via environment variable, restart unless-stopped policy.

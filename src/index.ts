@@ -161,14 +161,15 @@ async function main(): Promise<void> {
     healthServer = createHealthServer(config.observability.health.port, {
       haClient,
       circuitBreaker,
+      metrics,
       startTime,
       version,
     });
   }
 
   // 10. Start confirmation webhook server
-  // Use a port offset from the main server port for the webhook
-  const webhookPort = config.server.port + 1;
+  // Runs on MCP port + 2 to avoid conflicting with health check (port + 1 range)
+  const webhookPort = config.server.port + 2;
   confirmationManager.startWebhookServer(webhookPort);
 
   // Graceful shutdown

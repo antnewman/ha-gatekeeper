@@ -241,7 +241,7 @@ Retention is configurable (default: 90 days). A daily cleanup job removes entrie
   "uptime_seconds": 86400,
   "last_tool_call": "2026-04-13T10:30:00Z",
   "error_rate_1h": 0.02,
-  "version": "1.0.0"
+  "version": "0.1.0"
 }
 ```
 

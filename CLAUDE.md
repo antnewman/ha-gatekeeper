@@ -110,12 +110,12 @@ Dev: `typescript`, `vitest`, `tsx`, `eslint`, `typescript-eslint`, `@types/bette
 The project is built incrementally. Each phase must pass all tests before proceeding:
 
 1. **Foundation** (complete) -- scaffolding, config loader, logger, HA client
-2. **Policy Engine** -- tier resolver, rate limiter, range clamper, policy orchestrator
-3. **Observability** -- audit log, metrics, health check
-4. **MCP Server + Tools** -- server setup, all 14 tools, entity validator
-5. **Execution + Circuit Breaker** -- state capture, circuit breaker, full pipeline
-6. **HITL Confirmation** -- confirmation tokens, webhooks, notifications
-7. **Docker + Documentation** -- Dockerfile, docker-compose, README, guides
+2. **Policy Engine** (complete) -- tier resolver, rate limiter, range clamper, policy orchestrator
+3. **Observability** (complete) -- SQLite audit log, Prometheus metrics, health check
+4. **MCP Server + Tools** (complete) -- server setup, all 14 tools, entity validator
+5. **Execution + Circuit Breaker** (complete) -- state capture, circuit breaker, full pipeline
+6. **HITL Confirmation** (complete) -- confirmation tokens, webhooks, notifications
+7. **Docker + Documentation** (complete) -- Dockerfile, docker-compose, README, guides
 
 ## Definition of Done
 

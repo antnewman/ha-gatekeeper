@@ -4,6 +4,7 @@ services:
     ports:
       - "8200:8200"   # MCP Streamable HTTP
       - "8201:8201"   # Health check
+      - "8202:8202"   # Confirmation webhook
       - "9090:9090"   # Prometheus metrics
     volumes:
       - ./config.yaml:/app/config.yaml:ro
