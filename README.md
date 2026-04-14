@@ -241,6 +241,12 @@ These are not in scope for v1 but are planned for future releases:
 
 ---
 
+## Disclaimer
+
+This software controls physical devices. The authors accept no responsibility for any damage, injury, or loss arising from its use. Always verify your policy configuration before connecting to a production Home Assistant instance.
+
+---
+
 ## Licence
 
 [MIT](LICENSE)
