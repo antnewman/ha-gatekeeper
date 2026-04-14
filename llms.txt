@@ -1,6 +1,6 @@
 # ha-gatekeeper
 
-> A reliability-first MCP server for Home Assistant that implements the "LLM as an untrusted advisor" architecture. Interposes a four-tier deterministic policy engine (unrestricted, logged, confirmed, prohibited) between an LLM's intent and Home Assistant's execution layer. Every action is classified, authorised, rate-limited, and audited. Built with TypeScript, Node.js 20+, and the MCP SDK v1.x using Streamable HTTP transport.
+> A reliability-first MCP server for Home Assistant that implements the "LLM as an untrusted advisor" architecture. Interposes a four-tier deterministic policy engine (unrestricted, logged, confirmed, prohibited) between an LLM's intent and Home Assistant's execution layer. Every action is classified, authorised, rate-limited, and audited. Implements four layers from the "Verified Autonomy" trust architecture: fuzzy entity validation (Layer 03), deterministic guardrails (Layer 05), hash-chained audit trails (Layer 08), and circuit breaker escalation (Layer 02). Built with TypeScript, Node.js 20+, and the MCP SDK v1.x using Streamable HTTP transport.
 
 ## Documentation
 
@@ -19,6 +19,8 @@
 - [src/config/schema.ts](https://github.com/antnewman/ha-gatekeeper/blob/main/src/config/schema.ts): Zod schema defining the configuration structure and validation rules
 - [src/config/loader.ts](https://github.com/antnewman/ha-gatekeeper/blob/main/src/config/loader.ts): YAML config loading with environment variable substitution
 - [src/execution/ha-client.ts](https://github.com/antnewman/ha-gatekeeper/blob/main/src/execution/ha-client.ts): Home Assistant WebSocket client wrapper with entity state cache
+- [src/server/entity-validator.ts](https://github.com/antnewman/ha-gatekeeper/blob/main/src/server/entity-validator.ts): Fuzzy matching entity validator with Levenshtein distance (Verified Autonomy Layer 03)
+- [src/observability/audit-log.ts](https://github.com/antnewman/ha-gatekeeper/blob/main/src/observability/audit-log.ts): SHA-256 hash-chained audit log for tamper-evident recording (Verified Autonomy Layer 08)
 - [src/types/policy.ts](https://github.com/antnewman/ha-gatekeeper/blob/main/src/types/policy.ts): Policy engine type definitions (tiers, decisions, constraints)
 
 ## Optional

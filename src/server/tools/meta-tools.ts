@@ -1,5 +1,5 @@
 /**
- * Meta tools: get_server_health.
+ * Meta tools: get_server_health, verify_audit_integrity.
  */
 
 /* eslint-disable @typescript-eslint/require-await -- MCP SDK ToolCallback requires async */
@@ -45,6 +45,39 @@ export function registerMetaTools(
       return {
         content: [
           { type: "text" as const, text: JSON.stringify(health, null, 2) },
+        ],
+      };
+    },
+  );
+
+  server.registerTool(
+    "verify_audit_integrity",
+    {
+      description:
+        "Verify the integrity of the audit log hash chain. Each audit entry is cryptographically chained to the previous one. This tool checks that no entries have been tampered with.",
+      annotations: { readOnlyHint: true },
+    },
+    async () => {
+      const result = deps.auditLog.verifyChain();
+
+      const response: Record<string, unknown> = {
+        valid: result.valid,
+        total_rows: result.totalRows,
+      };
+
+      if (!result.valid && result.brokenAt !== undefined) {
+        response["broken_at_row_id"] = result.brokenAt;
+        response["message"] =
+          `Audit chain integrity violation detected at row ${String(result.brokenAt)}. ` +
+          `The hash chain is broken, indicating that data has been modified after it was written.`;
+      } else {
+        response["message"] =
+          `Audit chain verified. All ${String(result.totalRows)} entries are intact and unmodified.`;
+      }
+
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify(response, null, 2) },
         ],
       };
     },

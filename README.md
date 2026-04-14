@@ -74,12 +74,12 @@ Entity-level overrides let you promote or demote specific devices regardless of 
 
 - **Rate limiting** -- per-entity sliding window (configurable calls per minute)
 - **Range clamping** -- hard min/max boundaries on numeric values (e.g. thermostat temperature 15-25C)
-- **Entity validation** -- every entity ID is checked against live HA state before reaching the policy engine
+- **Entity validation** -- every entity ID is checked against live HA state with fuzzy matching suggestions for typos
 - **Circuit breaker** -- three-state (closed/open/half-open) protection against cascading failures
 
 ### Observability
 
-- **Audit log** -- SQLite database recording every policy decision with before/after entity state
+- **Audit log** -- SQLite database with SHA-256 hash-chained entries for tamper-evident recording of every policy decision
 - **Prometheus metrics** -- tool call counts, durations, circuit breaker state, denial rates
 - **Health check endpoint** -- connection status, entity count, error rates, uptime
 
@@ -87,7 +87,7 @@ Entity-level overrides let you promote or demote specific devices regardless of 
 
 ## Tools
 
-ha-gatekeeper exposes 14 curated tools organised by intent:
+ha-gatekeeper exposes 15 curated tools organised by intent:
 
 | Category | Tool | Description |
 |----------|------|-------------|
@@ -105,6 +105,7 @@ ha-gatekeeper exposes 14 curated tools organised by intent:
 | **Monitor** | `get_anomalies` | Analyse home state and report anomalies |
 | | `get_policy_summary` | Current policy tiers and entity classifications |
 | **Meta** | `get_server_health` | Health status, circuit breaker, error rates |
+| | `verify_audit_integrity` | Verify the hash chain of the audit log |
 
 ---
 
@@ -208,6 +209,12 @@ tests/
   integration/                # End-to-end pipeline tests
   fixtures/                   # Test config, mock entities
 ```
+
+---
+
+## Verified Autonomy
+
+ha-gatekeeper implements four layers from the [Verified Autonomy: A Field Guide to Engineering Trust in AI Systems](https://github.com/antnewman/verified-autonomy) nine-layer trust architecture. Layer 03 (Making Failures Visible) via entity validation with fuzzy matching that returns suggestions when the LLM hallucinates an entity name. Layer 05 (Deterministic Guardrails) via the four-tier policy engine where "the model proposes, the rule decides." Layer 08 (Cryptographic Audit Trails) via hash-chained audit logging where each row includes a SHA-256 hash of the previous row, making the trail tamper-evident. Layer 02 (Outlier Detection as Hard Escalation) via the circuit breaker where any single failure signal independently triggers protective action.
 
 ---
 

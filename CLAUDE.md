@@ -30,6 +30,20 @@ Four-layer design:
 
 Request flow: tool call -> entity validation -> tier resolution -> policy constraints -> execution -> state capture -> audit log.
 
+## Verified Autonomy Layer Mapping
+
+ha-gatekeeper implements four of the nine layers from "Verified Autonomy: A Field Guide to Engineering Trust in AI Systems" (Newman & Greene, 2026). This is not a coincidence -- the Field Guide's trust architecture informed the design of this server.
+
+**Layer 03: Making Failures Visible.** The Field Guide introduces a third output category: results the system is suspicious of, separated from results it trusts, made visible to human reviewers. ha-gatekeeper implements this through entity validation with fuzzy matching. When a tool call targets a non-existent entity (a hallucination), the server does not silently reject it. It returns the rejection alongside a list of similar entity names, making the failure visible to the LLM so it can self-correct. The `ha_gatekeeper_entity_hallucinations_total` metric tracks these incidents over time.
+
+**Layer 05: Deterministic Guardrails.** The Field Guide's central guardrail principle is: "The model proposes. The rule decides." ha-gatekeeper's policy engine is a direct implementation of this pattern. The four-tier system (Unrestricted, Logged, Confirmed, Prohibited) maps to the Field Guide's three-severity model (INFO, WARN, BLOCK) with an additional read-only tier. Every policy decision traces back to a specific tier assignment and rule, creating the audit trail the Field Guide requires.
+
+**Layer 08: Cryptographic Audit Trails (partial).** The Field Guide argues that trust in regulated environments requires the ability to prove what the system knew and decided. ha-gatekeeper's SQLite audit log captures every decision with full context. The hash-chained integrity mechanism (each row includes a SHA-256 hash of the previous row) makes the audit trail tamper-evident -- any modification to a historical record breaks the chain.
+
+**Layer 02: Outlier Detection as Hard Escalation (architectural pattern).** The Field Guide's OR condition -- outliers OR low confidence, each independently triggering escalation -- is echoed in ha-gatekeeper's circuit breaker design. Any single failure signal (consecutive API failures, timeout, entity hallucination spike) independently triggers protective action. The system fails safe by design.
+
+For the full Field Guide, see: github.com/antnewman/verified-autonomy
+
 ## Project Structure
 
 ```
@@ -42,6 +56,7 @@ src/
     defaults.ts                # Default config values
   server/
     mcp-server.ts              # McpServer setup and transport
+    entity-validator.ts        # Fuzzy matching entity validation (Layer 03)
     tools/
       index.ts                 # Tool registry
       read-tools.ts            # get_entity_state, list_entities, etc.

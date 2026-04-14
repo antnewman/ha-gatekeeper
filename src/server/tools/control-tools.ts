@@ -17,6 +17,7 @@ import {
   compareStates,
 } from "../../execution/state-capture.js";
 import { CircuitBreakerOpenError } from "../../execution/circuit-breaker.js";
+import { validateEntity } from "../entity-validator.js";
 import { logger } from "../../logger.js";
 
 /**
@@ -83,14 +84,34 @@ async function executeControlAction(
   const action = `${domain}.${service}`;
   const startTime = Date.now();
 
-  // Validate entity exists
-  if (!deps.haClient.entityExists(entityId)) {
+  // Validate entity exists (Layer 03: Making Failures Visible)
+  const validation = validateEntity(entityId, deps.haClient);
+  if (!validation.valid) {
     deps.metrics.recordEntityHallucination();
+
+    // Log the hallucination with suggestions in the audit log
+    deps.auditLog.write(
+      buildAuditEntry(
+        {
+          timestamp: new Date().toISOString(),
+          request_id: requestId,
+          tool_name: toolName,
+          policy_tier: 3,
+          policy_decision: "denied_prohibited",
+        },
+        {
+          entity_id: entityId,
+          action,
+          error: validation.error,
+        },
+      ),
+    );
+
     return {
       content: [
         {
           type: "text" as const,
-          text: `Entity '${entityId}' does not exist in Home Assistant.`,
+          text: validation.error ?? `Entity '${entityId}' does not exist.`,
         },
       ],
       isError: true,

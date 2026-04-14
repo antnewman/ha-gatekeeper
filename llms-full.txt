@@ -9,8 +9,9 @@ ha-gatekeeper interposes a four-tier deterministic policy engine between an LLM 
 Key properties:
 - If ha-gatekeeper crashes, Home Assistant continues to function normally. The LLM layer is additive, never load-bearing.
 - Unclassified entities default to Tier 3 (prohibited). The system fails closed.
-- Entity IDs are validated against live HA state before reaching the policy engine. Hallucinated entities are rejected.
-- All Tier 1+ actions are recorded in a SQLite audit log with before/after entity state.
+- Entity IDs are validated against live HA state with fuzzy matching. Hallucinated entities are rejected with suggestions for similar entity names, enabling LLM self-correction.
+- All Tier 1+ actions are recorded in a SHA-256 hash-chained SQLite audit log with before/after entity state. Each row includes a hash of the previous row, making the trail tamper-evident.
+- Implements four layers from the "Verified Autonomy: A Field Guide to Engineering Trust in AI Systems" (Newman & Greene, 2026) trust architecture.
 
 Tech stack: TypeScript (strict mode), Node.js >= 20, MCP SDK v1.x (Streamable HTTP transport), home-assistant-js-websocket, better-sqlite3, Zod, pino, prom-client, Express.
 
@@ -20,12 +21,26 @@ Tech stack: TypeScript (strict mode), Node.js >= 20, MCP SDK v1.x (Streamable HT
 
 Four-layer design:
 
-1. MCP Server (Layer 1): Tool registry (14 curated tools), entity validator, request context builder.
+1. MCP Server (Layer 1): Tool registry (15 curated tools), entity validator, request context builder.
 2. Policy Engine (Layer 2): Tier resolver, rate limiter, range clamper, HITL confirmation.
 3. Execution Engine (Layer 3): HA WebSocket client, state capture with 500ms settling delay, three-state circuit breaker.
 4. Observability (Layer 4): SQLite audit log, Prometheus metrics, health check endpoint.
 
-Request flow: MCP tool call -> entity validation (does entity exist in HA?) -> tier resolution (entity -> tier 0-3) -> policy constraints (rate limit, range clamp, confirmation) -> execution via HA WebSocket -> state capture (before/after) -> audit log -> return result.
+Request flow: MCP tool call -> entity validation (does entity exist in HA? fuzzy match suggestions if not) -> tier resolution (entity -> tier 0-3) -> policy constraints (rate limit, range clamp, confirmation) -> execution via HA WebSocket -> state capture (before/after) -> hash-chained audit log -> return result.
+
+---
+
+## Verified Autonomy Layer Mapping
+
+Implements four layers from "Verified Autonomy: A Field Guide to Engineering Trust in AI Systems" (Newman & Greene, 2026):
+
+Layer 03 (Making Failures Visible): Entity validation with Levenshtein-distance fuzzy matching. Hallucinated entity names return up to 3 suggestions from the same domain, enabling LLM self-correction. Tracked by ha_gatekeeper_entity_hallucinations_total metric.
+
+Layer 05 (Deterministic Guardrails): Four-tier policy engine. "The model proposes. The rule decides." Maps to the Field Guide's three-severity model (INFO, WARN, BLOCK) plus a read-only tier.
+
+Layer 08 (Cryptographic Audit Trails): Each audit row includes a SHA-256 hash (row_hash) and a reference to the previous row's hash (previous_hash). First row uses "GENESIS". The verify_audit_integrity tool checks the entire chain for tampering.
+
+Layer 02 (Outlier Detection as Hard Escalation): Circuit breaker triggers independently on any failure signal. Fails safe by design.
 
 ---
 
@@ -65,7 +80,7 @@ Entity-level overrides always take precedence over domain rules. Example: light.
 
 ## Tools
 
-14 curated tools organised by user intent:
+15 curated tools organised by user intent:
 
 ### Read Tools (Tier 0)
 - get_entity_state: Get current state and attributes of one entity. Input: entity_id.
@@ -88,6 +103,7 @@ Entity-level overrides always take precedence over domain rules. Example: light.
 
 ### Meta Tools
 - get_server_health: Return health status, circuit breaker state, recent error rates.
+- verify_audit_integrity: Verify the hash chain of the audit log. Checks that no entries have been tampered with.
 
 All tools use Zod input schemas. Read tools are annotated with readOnlyHint: true. Control tools with tier >= 2 are annotated with destructiveHint: true.
 
@@ -160,7 +176,7 @@ HALF_OPEN: Limited requests allowed. If recovery_threshold consecutive successes
 
 SQLite database with the following schema:
 
-Columns: id (INTEGER PK), timestamp (TEXT ISO 8601), request_id (TEXT UUID), tool_name (TEXT), entity_id (TEXT), action (TEXT), parameters (TEXT JSON), policy_tier (INTEGER 0-3), policy_decision (TEXT: allowed|denied_rate_limit|denied_prohibited|denied_timeout|confirmed|clamped), clamped_from (TEXT JSON), clamped_to (TEXT JSON), state_before (TEXT JSON), state_after (TEXT JSON), execution_duration_ms (INTEGER), error (TEXT), llm_rationale (TEXT), created_at (TEXT).
+Columns: id (INTEGER PK), timestamp (TEXT ISO 8601), request_id (TEXT UUID), tool_name (TEXT), entity_id (TEXT), action (TEXT), parameters (TEXT JSON), policy_tier (INTEGER 0-3), policy_decision (TEXT: allowed|denied_rate_limit|denied_prohibited|denied_timeout|confirmed|clamped), clamped_from (TEXT JSON), clamped_to (TEXT JSON), state_before (TEXT JSON), state_after (TEXT JSON), execution_duration_ms (INTEGER), error (TEXT), llm_rationale (TEXT), row_hash (TEXT SHA-256), previous_hash (TEXT SHA-256 or "GENESIS"), created_at (TEXT).
 
 Indexes on: timestamp, entity_id, policy_decision.
 Retention: configurable, default 90 days.
@@ -204,12 +220,13 @@ src/
     defaults.ts                Default config values
   server/
     mcp-server.ts              McpServer setup and transport
+    entity-validator.ts        Fuzzy matching entity validation (Levenshtein distance)
     tools/
       index.ts                 Tool registry
       read-tools.ts            get_entity_state, list_entities, get_area_summary, get_home_summary, get_entity_history
       control-tools.ts         turn_on, turn_off, toggle, set_value, activate_scene, send_command
       monitoring-tools.ts      get_anomalies, get_policy_summary
-      meta-tools.ts            get_server_health
+      meta-tools.ts            get_server_health, verify_audit_integrity
   policy/
     engine.ts                  Policy evaluation orchestrator
     tier-resolver.ts           Entity/action -> tier number

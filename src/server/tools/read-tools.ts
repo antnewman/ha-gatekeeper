@@ -10,6 +10,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ToolDependencies } from "./index.js";
+import { validateEntity } from "../entity-validator.js";
 
 /**
  * Register all read tools with the MCP server.
@@ -27,14 +28,27 @@ export function registerReadTools(
       annotations: { readOnlyHint: true },
     },
     async ({ entity_id }) => {
-      const entity = deps.haClient.getEntityState(entity_id);
-      if (!entity) {
+      const validation = validateEntity(entity_id, deps.haClient);
+      if (!validation.valid) {
         deps.metrics.recordEntityHallucination();
         return {
           content: [
             {
               type: "text" as const,
-              text: `Entity '${entity_id}' does not exist in Home Assistant.`,
+              text: validation.error ?? `Entity '${entity_id}' does not exist.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const entity = deps.haClient.getEntityState(entity_id);
+      if (!entity) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Entity '${entity_id}' state is unavailable.`,
             },
           ],
           isError: true,
@@ -217,13 +231,14 @@ export function registerReadTools(
       annotations: { readOnlyHint: true },
     },
     async ({ entity_id, start_time, end_time }) => {
-      if (!deps.haClient.entityExists(entity_id)) {
+      const validation = validateEntity(entity_id, deps.haClient);
+      if (!validation.valid) {
         deps.metrics.recordEntityHallucination();
         return {
           content: [
             {
               type: "text" as const,
-              text: `Entity '${entity_id}' does not exist in Home Assistant.`,
+              text: validation.error ?? `Entity '${entity_id}' does not exist.`,
             },
           ],
           isError: true,
