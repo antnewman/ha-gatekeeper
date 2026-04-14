@@ -1,5 +1,6 @@
 services:
   ha-gatekeeper:
+    image: antnewman/ha-gatekeeper:latest
     build: .
     ports:
       - "8200:8200"   # MCP Streamable HTTP

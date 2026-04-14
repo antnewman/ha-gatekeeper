@@ -119,6 +119,16 @@ ha-gatekeeper exposes 15 curated tools organised by intent:
 
 ### Docker (recommended)
 
+Pull the pre-built image:
+
+```bash
+docker pull antnewman/ha-gatekeeper:latest
+# or from GitHub Container Registry:
+docker pull ghcr.io/antnewman/ha-gatekeeper:latest
+```
+
+Then run with Docker Compose:
+
 ```bash
 git clone https://github.com/antnewman/ha-gatekeeper.git
 cd ha-gatekeeper
@@ -130,7 +140,7 @@ cp config.example.yaml config.yaml
 # Set your token
 export HA_TOKEN="your-long-lived-access-token"
 
-# Run
+# Run (pulls the image or builds locally)
 docker compose up -d
 ```
 
